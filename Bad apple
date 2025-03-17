@@ -1,0 +1,113 @@
+import pygame
+import time
+import os
+import sys
+
+FRAMES_FOLDER = "/storage/emulated/0/BAD_APPLE_FRAMES"
+AUDIO_FILE = "/storage/emulated/0/bad_apple.wav"
+FPS = 30
+FRAME_DELAY = 1.0 / FPS
+
+pygame.init()
+pygame.mixer.init()
+
+infoObject = pygame.display.Info()
+SCREEN_WIDTH = infoObject.current_w
+SCREEN_HEIGHT = infoObject.current_h
+
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
+pygame.display.set_caption("Bad Apple - Crop Fill")
+
+# Load and play audio
+try:
+    pygame.mixer.music.load(AUDIO_FILE)
+    pygame.mixer.music.play()
+    print("✅ Audio loaded and playing.")
+except Exception as e:
+    print(f"❌ Failed to load audio: {e}")
+    sys.exit(1)
+
+if not os.path.exists(FRAMES_FOLDER):
+    print(f"❌ Frames folder not found: {FRAMES_FOLDER}")
+    sys.exit(1)
+
+files = os.listdir(FRAMES_FOLDER)
+image_files = sorted([f for f in files if f.endswith((".png", ".jpg", ".jpeg"))])
+
+if not image_files:
+    print(f"❌ No image files found in folder {FRAMES_FOLDER}!")
+    sys.exit(1)
+
+print(f"✅ {len(image_files)} frames found. Starting playback...")
+
+def crop_and_scale(image, screen_width, screen_height):
+    img_width, img_height = image.get_size()
+    img_ratio = img_width / img_height
+    screen_ratio = screen_width / screen_height
+
+    # Decide which dimension to crop
+    if img_ratio > screen_ratio:
+        # Image is wider -> crop width
+        new_height = img_height
+        new_width = int(screen_ratio * new_height)
+        x_offset = (img_width - new_width) // 2
+        y_offset = 0
+    else:
+        # Image is taller -> crop height
+        new_width = img_width
+        new_height = int(new_width / screen_ratio)
+        x_offset = 0
+        y_offset = (img_height - new_height) // 2
+
+    cropped_surface = pygame.Surface((new_width, new_height))
+    cropped_surface.blit(image, (0, 0), (x_offset, y_offset, new_width, new_height))
+
+    # Scale cropped surface to fit screen
+    return pygame.transform.scale(cropped_surface, (screen_width, screen_height))
+
+start_time = time.time()
+
+for i, file_name in enumerate(image_files):
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit(0)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit(0)
+
+    frame_path = os.path.join(FRAMES_FOLDER, file_name)
+
+    try:
+        frame_image = pygame.image.load(frame_path)
+        frame_image = crop_and_scale(frame_image, SCREEN_WIDTH, SCREEN_HEIGHT)
+    except Exception as e:
+        print(f"❌ Error loading image {file_name}: {e}")
+        continue
+
+    # Display full screen image
+    screen.blit(frame_image, (0, 0))
+    pygame.display.flip()
+
+    now = time.time()
+    target_time = start_time + i * FRAME_DELAY
+    delay = target_time - now
+    if delay > 0:
+        time.sleep(delay)
+
+print("✅ Finished frames, waiting for audio to end...")
+
+while pygame.mixer.music.get_busy():
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit(0)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit(0)
+    time.sleep(0.1)
+
+pygame.quit()
+print("✅ Done!")
